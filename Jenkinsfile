@@ -9,6 +9,7 @@ node('node') {
       echo "Current build result: ${currentBuild.result}"
     }
 
+/*
     stage('Run Versions Test') {
         try {
           echo "Running Versions test"
@@ -37,6 +38,38 @@ node('node') {
         finally {
           sh 'docker stop postgres || true'
           sh 'docker stop redis || true'
+        }
+    }
+    */
+
+    stage('Run Rolling Upgrade Test') {
+        try {
+          echo "Running Rolling Upgrade test"
+
+          env.STORJ_SIM_POSTGRES = 'postgres://postgres@postgres:5432/teststorj2?sslmode=disable'
+          env.STORJ_SIM_REDIS = 'redis:6379'
+
+          echo "STORJ_SIM_POSTGRES: $STORJ_SIM_POSTGRES"
+          echo "STORJ_SIM_REDIS: $STORJ_SIM_REDIS"
+          sh 'docker run --rm -d -p 5433:5432 --name postgres2 postgres:9.6'
+          sh 'docker run --rm -d -p 6380:6379 --name redis2 redis:latest'
+
+          sh '''until $(docker logs postgres2 | grep "database system is ready to accept connections" > /dev/null)
+                do printf '.'
+                sleep 5
+                done
+            '''
+          sh 'docker exec postgres2 createdb -U postgres teststorj2'
+          // fetch the remote master branch
+          sh 'git fetch --no-tags --progress -- https://github.com/storj/storj.git +refs/heads/master:refs/remotes/origin/master'
+          sh 'docker run -u $(id -u):$(id -g) --rm -i -v $PWD:$PWD -w $PWD --entrypoint $PWD/scripts/tests/rollingupgrade/test-sim-rolling-upgrade.sh -e STORJ_SIM_POSTGRES -e STORJ_SIM_REDIS --link redis2:redis --link postgres2:postgres -e CC=gcc storjlabs/golang:1.13.5'
+        }
+        catch(err){
+            throw err
+        }
+        finally {
+          sh 'docker stop postgres2 || true'
+          sh 'docker stop redis2 || true'
         }
     }
 
@@ -93,6 +126,7 @@ node('node') {
     echo "Setting build result to FAILURE"
     currentBuild.result = "FAILURE"
 
+    /*
     slackSend color: 'danger', message: "@channel ${env.BRANCH_NAME} build failed during stage ${env.STAGE_NAME} ${env.BUILD_URL}"
 
     mail from: 'builds@storj.io',
@@ -100,6 +134,7 @@ node('node') {
       to: 'builds@storj.io',
       subject: "storj/storj branch ${env.BRANCH_NAME} build failed",
       body: "Project build log: ${env.BUILD_URL}"
+      */
 
       throw err
 
