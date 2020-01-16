@@ -78,6 +78,21 @@ int main(int argc, char *argv[])
         free_scope(scope);
         free_scope(restrictedScope);
     }
+    {
+        ScopeRef scope = parse_scope(scopeStr, err);
+        require_noerror(*err);
+        requiref(scope._handle != 0, "got empty scope\n");
+
+        Caveat caveat = {disallow_writes : true};
+
+        prepare_restrictions(1);
+        append_restriction("bucket1", "path1");
+        ScopeRef restrictedScope = restrict_scope2(scope, caveat, err);
+        require_noerror(*err);
+
+        free_scope(scope);
+        free_scope(restrictedScope);
+    }
 
     requiref(internal_UniverseIsEmpty(), "universe is not empty\n");
 }
